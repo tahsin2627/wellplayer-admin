@@ -1,49 +1,38 @@
 export default async function handler(request, response) {
-    if (request.method !== 'POST') {
-        return response.status(405).json({ error: 'Method Not Allowed' });
-    }
-
-    const { tmdb_id, imdb_id, title, embed_url, secret_key } = request.body;
-    
-    // --- Security Check ---
-    const ADMIN_SECRET_KEY = process.env.ADMIN_SECRET_KEY;
-    if (!ADMIN_SECRET_KEY || secret_key !== ADMIN_SECRET_KEY) {
-        return response.status(401).json({ error: 'Unauthorized. Invalid secret key.' });
-    }
-
     const SUPABASE_URL = process.env.SUPABASE_URL;
     const SUPABASE_KEY = process.env.SUPABASE_KEY;
 
-    if (!SUPABASE_URL || !SUPABASE_KEY) {
-        return response.status(500).json({ error: 'Server configuration error.' });
+    // It can now accept tmdb_id OR imdb_id from the query
+    const { tmdb_id, imdb_id } = request.query;
+
+    if (!tmdb_id && !imdb_id) {
+        return response.status(400).json({ error: 'tmdb_id or imdb_id is required.' });
     }
 
+    // Build the query based on which ID is provided
+    let query_param = tmdb_id ? `tmdb_id=eq.${tmdb_id}` : `imdb_id=eq.${imdb_id}`;
+
     try {
-        if ((!tmdb_id && !imdb_id) || !title || !embed_url) {
-            return response.status(400).json({ error: 'Missing required fields.' });
-        }
-
-        const dataToInsert = { title: title, embed_url: embed_url };
-        if (tmdb_id) dataToInsert.tmdb_id = parseInt(tmdb_id, 10);
-        if (imdb_id) dataToInsert.imdb_id = imdb_id;
-
-        const res = await fetch(`${SUPABASE_URL}/rest/v1/links`, {
-            method: 'POST',
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/links?${query_param}&select=embed_url,title`, {
             headers: {
                 'apikey': SUPABASE_KEY,
-                'Authorization': `Bearer ${SUPABASE_KEY}`,
-                'Content-Type': 'application/json',
-                'Prefer': 'return=minimal',
-            },
-            body: JSON.stringify(dataToInsert)
+                'Authorization': `Bearer ${SUPABASE_KEY}`
+            }
         });
 
-        if (res.status !== 201) {
-            const errorData = await res.json();
-            throw new Error(errorData.message || 'Failed to insert data into Supabase.');
+        if (!res.ok) {
+            throw new Error('Failed to fetch data from Supabase.');
         }
 
-        return response.status(200).json({ message: 'Success!' });
+        const data = await res.json();
+        
+        const formattedLinks = data.map(item => ({
+            url: item.embed_url,
+            source: 'My Manual Server',
+            lang: 'Manual'
+        }));
+
+        return response.status(200).json({ links: formattedLinks });
 
     } catch (error) {
         return response.status(500).json({ error: error.message });
