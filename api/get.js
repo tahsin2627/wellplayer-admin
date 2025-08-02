@@ -14,7 +14,6 @@ export default async function handler(request, response) {
     } else if (imdb_id) {
         query_param = `imdb_id=eq.${imdb_id}`;
     } else if (query) {
-        // Use 'ilike' for case-insensitive search
         query_param = `title=ilike.%${query}%`;
     }
 
@@ -26,12 +25,19 @@ export default async function handler(request, response) {
             }
         });
 
-        if (!res.ok) {
-            throw new Error('Failed to fetch data from Supabase.');
-        }
-
+        if (!res.ok) { throw new Error('Failed to fetch from Supabase'); }
         const data = await res.json();
-        return response.status(200).json({ results: data });
+        
+        // This endpoint will now be used for both searching and getting links.
+        // Let's format the output consistently.
+        const formattedResults = data.map(item => ({
+            tmdb_id: item.tmdb_id,
+            imdb_id: item.imdb_id,
+            title: item.title,
+            embed_url: item.embed_url // Keep the URL for when we fetch by ID
+        }));
+        
+        return response.status(200).json({ results: formattedResults });
 
     } catch (error) {
         return response.status(500).json({ error: error.message });
