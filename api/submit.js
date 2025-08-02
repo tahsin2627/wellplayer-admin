@@ -3,6 +3,14 @@ export default async function handler(request, response) {
         return response.status(405).json({ error: 'Method Not Allowed' });
     }
 
+    const { tmdb_id, imdb_id, title, embed_url, secret_key } = request.body;
+    
+    // --- Security Check ---
+    const ADMIN_SECRET_KEY = process.env.ADMIN_SECRET_KEY;
+    if (!ADMIN_SECRET_KEY || secret_key !== ADMIN_SECRET_KEY) {
+        return response.status(401).json({ error: 'Unauthorized. Invalid secret key.' });
+    }
+
     const SUPABASE_URL = process.env.SUPABASE_URL;
     const SUPABASE_KEY = process.env.SUPABASE_KEY;
 
@@ -11,22 +19,13 @@ export default async function handler(request, response) {
     }
 
     try {
-        const { tmdb_id, imdb_id, title, embed_url } = request.body;
-
         if ((!tmdb_id && !imdb_id) || !title || !embed_url) {
-            return response.status(400).json({ error: 'Missing required fields. Ensure title, URL, and at least one ID are provided.' });
+            return response.status(400).json({ error: 'Missing required fields.' });
         }
 
-        // Prepare the data to be sent to Supabase
-        const dataToInsert = {
-            title: title,
-            embed_url: embed_url
-        };
-        
-        // Add IDs only if they exist
+        const dataToInsert = { title: title, embed_url: embed_url };
         if (tmdb_id) dataToInsert.tmdb_id = parseInt(tmdb_id, 10);
         if (imdb_id) dataToInsert.imdb_id = imdb_id;
-
 
         const res = await fetch(`${SUPABASE_URL}/rest/v1/links`, {
             method: 'POST',
