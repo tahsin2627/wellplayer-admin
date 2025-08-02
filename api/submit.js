@@ -3,7 +3,6 @@ export default async function handler(request, response) {
         return response.status(405).json({ error: 'Method Not Allowed' });
     }
 
-    // These secret keys will be stored in Vercel, not in the code.
     const SUPABASE_URL = process.env.SUPABASE_URL;
     const SUPABASE_KEY = process.env.SUPABASE_KEY;
 
@@ -12,11 +11,22 @@ export default async function handler(request, response) {
     }
 
     try {
-        const { tmdb_id, title, embed_url } = request.body;
+        const { tmdb_id, imdb_id, title, embed_url } = request.body;
 
-        if (!tmdb_id || !title || !embed_url) {
-            return response.status(400).json({ error: 'Missing required fields.' });
+        if ((!tmdb_id && !imdb_id) || !title || !embed_url) {
+            return response.status(400).json({ error: 'Missing required fields. Ensure title, URL, and at least one ID are provided.' });
         }
+
+        // Prepare the data to be sent to Supabase
+        const dataToInsert = {
+            title: title,
+            embed_url: embed_url
+        };
+        
+        // Add IDs only if they exist
+        if (tmdb_id) dataToInsert.tmdb_id = parseInt(tmdb_id, 10);
+        if (imdb_id) dataToInsert.imdb_id = imdb_id;
+
 
         const res = await fetch(`${SUPABASE_URL}/rest/v1/links`, {
             method: 'POST',
@@ -26,15 +36,10 @@ export default async function handler(request, response) {
                 'Content-Type': 'application/json',
                 'Prefer': 'return=minimal',
             },
-            body: JSON.stringify({
-                tmdb_id: parseInt(tmdb_id, 10),
-                title: title,
-                embed_url: embed_url
-            })
+            body: JSON.stringify(dataToInsert)
         });
 
         if (res.status !== 201) {
-            // Try to get a more specific error message from Supabase
             const errorData = await res.json();
             throw new Error(errorData.message || 'Failed to insert data into Supabase.');
         }
