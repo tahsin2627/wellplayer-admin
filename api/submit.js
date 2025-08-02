@@ -2,24 +2,18 @@ export default async function handler(request, response) {
     const SUPABASE_URL = process.env.SUPABASE_URL;
     const SUPABASE_KEY = process.env.SUPABASE_KEY;
 
-    const { tmdb_id, imdb_id, query } = request.query;
+    // It can now accept tmdb_id OR imdb_id from the query
+    const { tmdb_id, imdb_id } = request.query;
 
-    if (!tmdb_id && !imdb_id && !query) {
-        return response.status(400).json({ error: 'An ID or query is required.' });
+    if (!tmdb_id && !imdb_id) {
+        return response.status(400).json({ error: 'tmdb_id or imdb_id is required.' });
     }
 
-    let query_param = '';
-    if (tmdb_id) {
-        query_param = `tmdb_id=eq.${tmdb_id}`;
-    } else if (imdb_id) {
-        query_param = `imdb_id=eq.${imdb_id}`;
-    } else if (query) {
-        // Use 'ilike' for case-insensitive search
-        query_param = `title=ilike.%${query}%`;
-    }
+    // Build the query based on which ID is provided
+    let query_param = tmdb_id ? `tmdb_id=eq.${tmdb_id}` : `imdb_id=eq.${imdb_id}`;
 
     try {
-        const res = await fetch(`${SUPABASE_URL}/rest/v1/links?${query_param}&select=*`, {
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/links?${query_param}&select=embed_url,title`, {
             headers: {
                 'apikey': SUPABASE_KEY,
                 'Authorization': `Bearer ${SUPABASE_KEY}`
@@ -31,7 +25,14 @@ export default async function handler(request, response) {
         }
 
         const data = await res.json();
-        return response.status(200).json({ results: data });
+        
+        const formattedLinks = data.map(item => ({
+            url: item.embed_url,
+            source: 'My Manual Server',
+            lang: 'Manual'
+        }));
+
+        return response.status(200).json({ links: formattedLinks });
 
     } catch (error) {
         return response.status(500).json({ error: error.message });
